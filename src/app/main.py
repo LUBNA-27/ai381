@@ -1,27 +1,35 @@
-"""Lab 1 FastAPI skeleton: serves the model you saved from the notebook.
+"""Churn prediction API."""
+import os
+from typing import Literal
 
-Run it by hand (this is Round 1 of the race):
-    uvicorn app.main:app --port 8000
-Then send predictions with curl (see sample_request.json).
-"""
 import joblib
 import pandas as pd
 from fastapi import FastAPI
+from pydantic import BaseModel, Field
 
-MODEL_PATH = "model.joblib"   # where the notebook saves the model (yes, hard-coded on purpose)
-FEATURES = ["tenure_months", "monthly_charges", "contract", "internet_service", "support_calls"]
+from src.train.train import FEATURES
 
-app = FastAPI(title="AI381 Lab 1 churn API")
+MODEL_PATH = os.getenv("MODEL_PATH", "model.joblib")
 model = joblib.load(MODEL_PATH)
+
+app = FastAPI(title="AI381 churn API")
+
+
+class Customer(BaseModel):
+    tenure_months: int = Field(ge=0)
+    monthly_charges: float = Field(ge=0)
+    support_calls: int = Field(ge=0)
+    contract: Literal["month-to-month", "one-year", "two-year"]
+    internet_service: Literal["dsl", "fiber", "none"]
 
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    return {"status": "ok", "model": MODEL_PATH}
 
 
 @app.post("/predict")
-def predict(customer: dict):
-    X = pd.DataFrame([customer])[FEATURES]
+def predict(customer: Customer):
+    X = pd.DataFrame([customer.model_dump()])[FEATURES]
     p = float(model.predict_proba(X)[0, 1])
     return {"churn_probability": round(p, 3)}
